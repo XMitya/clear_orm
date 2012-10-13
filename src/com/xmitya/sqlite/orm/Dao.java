@@ -61,9 +61,11 @@ public class Dao<T> {
 				continue;
 			if (fieldAn.id()) {
 				idField = fieldAn.columnName();
-				break;
+				return;
 			}
 		}
+		throw new IllegalStateException(
+				"No ID field found. One field should be marked as id.");
 	}
 
 	/**
@@ -80,6 +82,20 @@ public class Dao<T> {
 	 */
 	public boolean isOpen() {
 		return database.isOpen();
+	}
+
+	/**
+	 * Drop table with all data.
+	 */
+	public void dropTable() {
+		SQLiteHelper.dropTable(database, clazz);
+	}
+
+	/**
+	 * Create new table if it's not exists.
+	 */
+	public void createTableIfNotExists() {
+		SQLiteHelper.createTableIfNotExists(database, clazz);
 	}
 
 	/**
@@ -101,6 +117,11 @@ public class Dao<T> {
 				// get value
 				Object value = getValue(data, field);
 				if (value != null) {
+					// check if exists date pattern for formatting date to string
+					if(!"".equals(fieldAn.datePattern()) && fieldAn.datePattern() != null){
+						SimpleDateFormat format = new SimpleDateFormat(fieldAn.datePattern());
+						value = format.format((Date)value);
+					}
 					values.append("'").append(value.toString()).append("'")
 							.append(',');
 					builder.append(fieldAn.columnName()).append(',');
@@ -182,8 +203,7 @@ public class Dao<T> {
 		Cursor cursor = null;
 		T data = null;
 		try {
-			cursor = database.rawQuery(builder.toString(),
-					new String[] {});
+			cursor = database.rawQuery(builder.toString(), new String[] {});
 			cursor.moveToFirst();
 			if (cursor.isAfterLast()) {
 				return null;
@@ -193,7 +213,7 @@ public class Dao<T> {
 			e.printStackTrace();
 			throw new SQLException("Error on select by ID " + e.getMessage());
 		} finally {
-			if(cursor != null)
+			if (cursor != null)
 				cursor.close();
 		}
 		return data;
@@ -208,38 +228,38 @@ public class Dao<T> {
 		T data = constructor.newInstance();
 		for (int i = 0, col = 0, l = fields.length; i < l; i++) {
 			SQLiteField fieldAn = fields[i].getAnnotation(SQLiteField.class);
-			if (fieldAn == null){
+			if (fieldAn == null) {
 				continue;
 			}
 			Class<?> type = fields[i].getType();
 			if (type == Integer.class) {
 				Integer value = cursor.getInt(col);
-				setField(data, fields[i], value);
-			}else if(type == int.class){ 
+				setField(data, fields[i], type, value);
+			} else if (type == int.class) {
 				int value = cursor.getInt(col);
-				setField(data, fields[i], value);
-			}else if (type == Long.class) {
+				setField(data, fields[i], type, value);
+			} else if (type == Long.class) {
 				Long value = cursor.getLong(col);
-				setField(data, fields[i], value);
-			}else if(type == long.class){ 
+				setField(data, fields[i], type, value);
+			} else if (type == long.class) {
 				long value = cursor.getLong(col);
-				setField(data, fields[i], value);
+				setField(data, fields[i], type, value);
 			} else if (type == String.class) {
 				String value = cursor.getString(col);
-				setField(data, fields[i], value);
+				setField(data, fields[i], type, value);
 			} else if (type == Date.class) {
-				if (!"".equals(fieldAn.datePattern())) {
+				if (!"".equals(fieldAn.datePattern()) && fieldAn.datePattern() != null) {
 					SimpleDateFormat format = new SimpleDateFormat(
 							fieldAn.datePattern());
 					String dateStr = cursor.getString(col);
-					if(dateStr != null){
+					if (dateStr != null) {
 						Date value = format.parse(dateStr);
-						setField(data, fields[i], value);
+						setField(data, fields[i], type, value);
 					}
 				}
 			} else if (type == byte[].class) {
 				byte[] value = cursor.getBlob(col);
-				setField(data, fields[i], value);
+				setField(data, fields[i], type, value);
 			}
 			col++;
 		}
@@ -257,59 +277,12 @@ public class Dao<T> {
 		return method;
 	}
 
-	private void setField(T data, Field field, int value)
-			throws SecurityException, NoSuchMethodException,
-			IllegalArgumentException, IllegalAccessException,
-			InvocationTargetException {
-		Method method = getSetter(data, field, int.class);
-		method.invoke(data, value);
-	}
-	
-	private void setField(T data, Field field, long value)
-			throws SecurityException, NoSuchMethodException,
-			IllegalArgumentException, IllegalAccessException,
-			InvocationTargetException {
-		Method method = getSetter(data, field, long.class);
-		method.invoke(data, value);
-	}
-	
-	private void setField(T data, Field field, Integer value)
-			throws SecurityException, NoSuchMethodException,
-			IllegalArgumentException, IllegalAccessException,
-			InvocationTargetException {
-		Method method = getSetter(data, field, Integer.class);
-		method.invoke(data, value);
-	}
 
-	private void setField(T data, Field field, Long value)
+	private void setField(T data, Field field, Class<?> clazz, Object value)
 			throws SecurityException, NoSuchMethodException,
 			IllegalArgumentException, IllegalAccessException,
 			InvocationTargetException {
-		Method method = getSetter(data, field, Long.class);
-		method.invoke(data, value);
-	}
-
-	private void setField(T data, Field field, String value)
-			throws SecurityException, NoSuchMethodException,
-			IllegalArgumentException, IllegalAccessException,
-			InvocationTargetException {
-		Method method = getSetter(data, field, String.class);
-		method.invoke(data, value);
-	}
-
-	private void setField(T data, Field field, Date value)
-			throws SecurityException, NoSuchMethodException,
-			IllegalArgumentException, IllegalAccessException,
-			InvocationTargetException {
-		Method method = getSetter(data, field, Date.class);
-		method.invoke(data, value);
-	}
-
-	private void setField(T data, Field field, byte[] value)
-			throws SecurityException, NoSuchMethodException,
-			IllegalArgumentException, IllegalAccessException,
-			InvocationTargetException {
-		Method method = getSetter(data, field, byte[].class);
+		Method method = getSetter(data, field, clazz);
 		method.invoke(data, value);
 	}
 
@@ -373,7 +346,7 @@ public class Dao<T> {
 		} catch (Exception e) {
 			throw new SQLException("Error on select by ID " + e.getMessage());
 		} finally {
-			if(cursor != null)
+			if (cursor != null)
 				cursor.close();
 		}
 		return result;

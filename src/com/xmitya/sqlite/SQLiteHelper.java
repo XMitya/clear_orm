@@ -14,7 +14,9 @@ import android.util.Log;
 public class SQLiteHelper extends SQLiteOpenHelper {
 
 	 private static final String DATABASE_NAME = "database.db";
+	 private static String databaseName = DATABASE_NAME;
 	 private static final int DATABASE_VERSION = 1;
+	 private static int databaseVersion = DATABASE_VERSION;
 	
 	 /**
 	  * Entities classes which will be processed with {@link Dao}
@@ -38,7 +40,23 @@ public class SQLiteHelper extends SQLiteOpenHelper {
 	}
 
 	public SQLiteHelper(Context context) {
-		super(context, DATABASE_NAME, null, DATABASE_VERSION);
+		super(context, databaseName, null, databaseVersion);
+	}
+
+	public static String getDatabaseName() {
+		return databaseName;
+	}
+
+	public static void setDatabaseName(String databaseName) {
+		SQLiteHelper.databaseName = databaseName;
+	}
+
+	public static int getDatabaseVersion() {
+		return databaseVersion;
+	}
+
+	public static void setDatabaseVersion(int databaseVersion) {
+		SQLiteHelper.databaseVersion = databaseVersion;
 	}
 
 	@Override
@@ -60,13 +78,7 @@ public class SQLiteHelper extends SQLiteOpenHelper {
 	 */
 	private void dropTables(SQLiteDatabase database){
 		for(Class<?> clazz : entities){
-			StringBuilder builder = new StringBuilder("DROP TABLE ");
-			SQLiteTable tableNameAn = clazz.getAnnotation(SQLiteTable.class);
-			// skip if table not annotated
-			if(tableNameAn == null) continue;
-			builder.append(tableNameAn.tableName()).append(";");
-			Log.i("<<ARNIKA>>", builder.toString());
-			database.execSQL(builder.toString());
+			dropTable(database, clazz);
 		}
 	}
 	
@@ -76,31 +88,56 @@ public class SQLiteHelper extends SQLiteOpenHelper {
 	 */
 	private void createTablesIfNotExists(SQLiteDatabase database){
 		for(Class<?> clazz : entities){
-			StringBuilder builder = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
-			SQLiteTable tableNameAn = clazz.getAnnotation(SQLiteTable.class);
-			// skip if table not annotated
-			if(tableNameAn == null) continue;
-			builder.append(tableNameAn.tableName()).append(" (");
-			// search fields and column names
-			Field[] fields = clazz.getDeclaredFields();
-			for(Field field : fields){
-				SQLiteField fieldAn = field.getAnnotation(SQLiteField.class);
-				// skip if field not annotated
-				if(fieldAn == null) continue;
-				builder.append(" ").append(fieldAn.columnName());
-				if(fieldAn.id()){
-					builder.append(" PRIMARY KEY");
-					if(fieldAn.autoGenerate()){
-						builder.append(" AUTOINCREMENT");
-					}
-				}
-				builder.append(",");
-			}
-			//remove last comma
-			builder.deleteCharAt(builder.length() - 1);
-			builder.append(");");
-			Log.i("<<ARNIKA>>", builder.toString());
-			database.execSQL(builder.toString());
+			createTableIfNotExists(database, clazz);
 		}
+	}
+	/**
+	 * Creates new table if it not exists.
+	 * @param database
+	 * Writable database.
+	 * @param clazz
+	 * Entity class annotated with {@link SQLiteTable}
+	 */
+	public static void createTableIfNotExists(SQLiteDatabase database, Class<?> clazz){
+		StringBuilder builder = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
+		SQLiteTable tableNameAn = clazz.getAnnotation(SQLiteTable.class);
+		// skip if table not annotated
+		if(tableNameAn == null) return;
+		builder.append(tableNameAn.tableName()).append(" (");
+		// search fields and column names
+		Field[] fields = clazz.getDeclaredFields();
+		for(Field field : fields){
+			SQLiteField fieldAn = field.getAnnotation(SQLiteField.class);
+			// skip if field not annotated
+			if(fieldAn == null) continue;
+			builder.append(" ").append(fieldAn.columnName());
+			if(fieldAn.id()){
+				builder.append(" PRIMARY KEY");
+				if(fieldAn.autoGenerate()){
+					builder.append(" AUTOINCREMENT");
+				}
+			}
+			builder.append(",");
+		}
+		//remove last comma
+		builder.deleteCharAt(builder.length() - 1);
+		builder.append(");");
+		Log.i("<<ARNIKA>>", builder.toString());
+		database.execSQL(builder.toString());
+	}
+	
+	/**
+	 * Drop table with all data.
+	 * @param database writable database.
+	 * @param clazz entity class annotated with {@link SQLiteTable}
+	 */
+	public static void dropTable(SQLiteDatabase database, Class<?> clazz){
+		StringBuilder builder = new StringBuilder("DROP TABLE ");
+		SQLiteTable tableNameAn = clazz.getAnnotation(SQLiteTable.class);
+		// skip if table not annotated
+		if(tableNameAn == null) return;
+		builder.append(tableNameAn.tableName()).append(";");
+		Log.i("<<ARNIKA>>", builder.toString());
+		database.execSQL(builder.toString());
 	}
 }
